@@ -24,17 +24,24 @@
  * This code is distributed under a BSD style license, see the LICENSE
  * file for complete information.
  */
+
+#include "iperf_config.h"
+
 #include <errno.h>
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <signal.h>
 #include <sys/types.h>
+#ifdef HAVE_WINSOCK_2
+#include "gettimeofday.h"
+#else
+#include <unistd.h>
 #include <sys/select.h>
 #include <sys/uio.h>
 #include <arpa/inet.h>
+#endif
 
 #include "iperf.h"
 #include "iperf_api.h"
@@ -195,7 +202,7 @@ iperf_handle_message_client(struct iperf_test *test)
     int32_t err;
 
     /*!!! Why is this read() and not Nread()? */
-    if ((rval = read(test->ctrl_sck, (char*) &test->state, sizeof(signed char))) <= 0) {
+    if ((rval = Nread(test->ctrl_sck, (char*) &test->state, sizeof(signed char), 0)) <= 0) {
         if (rval == 0) {
             i_errno = IECTRLCLOSE;
             return -1;
@@ -315,7 +322,7 @@ iperf_client_end(struct iperf_test *test)
 
     /* Close all stream sockets */
     SLIST_FOREACH(sp, &test->streams, streams) {
-        close(sp->socket);
+        Nclose(sp->socket);
     }
 
     /* show final summary */

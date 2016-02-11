@@ -27,7 +27,11 @@
 #ifndef        __IPERF_API_H
 #define        __IPERF_API_H
 
+#ifdef HAVE_WINSOCK_2
+#include <WinSock2.h>
+#else
 #include <sys/time.h>
+#endif
 #include <setjmp.h>
 
 struct iperf_test;

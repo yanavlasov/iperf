@@ -29,14 +29,19 @@
 
 #include "iperf_config.h"
 
-#include <sys/time.h>
 #include <sys/types.h>
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
+
+#ifdef HAVE_WINSOCK_2
+#include <WinSock2.h>
+#else
+#include <sys/time.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
+#endif
 
 #if defined(HAVE_CPUSET_SETAFFINITY)
 #include <sys/param.h>

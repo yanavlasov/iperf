@@ -23,6 +23,8 @@
 /* cJSON */
 /* JSON parser in C. */
 
+#include "iperf_config.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -32,6 +34,9 @@
 #include <ctype.h>
 #ifdef HAVE_STDINT_H
 #include <stdint.h> 
+#endif
+#ifdef HAVE_WINSOCK_2
+#include <ws2tcpip.h>
 #endif
 #include <sys/types.h>
 #include "cjson.h"

@@ -27,27 +27,33 @@
 /* iperf_server_api.c: Functions to be used by an iperf server
 */
 
+#include "iperf_config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
 #include <errno.h>
-#include <unistd.h>
 #include <assert.h>
 #include <fcntl.h>
-#include <sys/socket.h>
+#ifdef HAVE_WINSOCK_2
+#include <ws2tcpip.h>
+#include "gettimeofday.h"
+#else
 #include <sys/types.h>
+#include <unistd.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h>
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#endif
 #include <netinet/tcp.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sched.h>
+#endif
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
 #include <setjmp.h>
 
 #include "iperf.h"
@@ -167,7 +173,7 @@ iperf_accept(struct iperf_test *test)
             i_errno = IESENDMESSAGE;
             return -1;
         }
-        close(s);
+        Nclose(s);
     }
 
     return 0;
@@ -204,7 +210,7 @@ iperf_handle_message_server(struct iperf_test *test)
             SLIST_FOREACH(sp, &test->streams, streams) {
                 FD_CLR(sp->socket, &test->read_set);
                 FD_CLR(sp->socket, &test->write_set);
-                close(sp->socket);
+                Nclose(sp->socket);
             }
             test->reporter_callback(test);
 	    if (iperf_set_send_state(test, EXCHANGE_RESULTS) != 0)
@@ -234,7 +240,7 @@ iperf_handle_message_server(struct iperf_test *test)
             SLIST_FOREACH(sp, &test->streams, streams) {
                 FD_CLR(sp->socket, &test->read_set);
                 FD_CLR(sp->socket, &test->write_set);
-                close(sp->socket);
+                Nclose(sp->socket);
             }
             test->state = IPERF_DONE;
             break;
@@ -252,7 +258,7 @@ iperf_test_reset(struct iperf_test *test)
 {
     struct iperf_stream *sp;
 
-    close(test->ctrl_sck);
+    Nclose(test->ctrl_sck);
 
     /* Free streams */
     while (!SLIST_EMPTY(&test->streams)) {
@@ -410,8 +416,8 @@ static void
 cleanup_server(struct iperf_test *test)
 {
     /* Close open test sockets */
-    close(test->ctrl_sck);
-    close(test->listener);
+    Nclose(test->ctrl_sck);
+    Nclose(test->listener);
 
     /* Cancel any remaining timers. */
     if (test->stats_timer != NULL) {
@@ -540,11 +546,11 @@ iperf_run_server(struct iperf_test *test)
                 if (streams_accepted == test->num_streams) {
                     if (test->protocol->id != Ptcp) {
                         FD_CLR(test->prot_listener, &test->read_set);
-                        close(test->prot_listener);
+                        Nclose(test->prot_listener);
                     } else { 
                         if (test->no_delay || test->settings->mss || test->settings->socket_bufsize) {
                             FD_CLR(test->listener, &test->read_set);
-                            close(test->listener);
+                            Nclose(test->listener);
                             if ((s = netannounce(test->settings->domain, Ptcp, test->bind_address, test->server_port)) < 0) {
 				cleanup_server(test);
                                 i_errno = IELISTEN;

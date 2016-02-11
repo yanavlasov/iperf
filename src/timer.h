@@ -30,7 +30,15 @@
 #ifndef __TIMER_H
 #define __TIMER_H
 
+#ifdef HAVE_WINSOCK_2
+#include <WinSock2.h>
+#else
 #include <sys/time.h>
+#endif
+
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
 
 /* TimerClientData is an opaque value that tags along with a timer.  The
 ** client can use it for whatever, and it gets passed to the callback when

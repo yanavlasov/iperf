@@ -24,14 +24,31 @@
  * This code is distributed under a BSD style license, see the LICENSE
  * file for complete information.
  */
+
+#include "iperf_config.h"
+
 #include <stdio.h>
 #include <errno.h>
-#include <netdb.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include "iperf.h"
 #include "iperf_api.h"
+
+#ifdef HAVE_WINSOCK_2
+
+#include "neterror.h"
+
+static const char* hstrerror(int err)
+{
+    static char msg[1024] = { 0 };
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), msg, sizeof(msg), 
+        NULL);
+
+    return msg;
+}
+#endif
 
 /* Do a printf to stderr. */
 void
@@ -360,6 +377,10 @@ iperf_strerror(int i_errno)
         strncat(errstr, ": ", len - strlen(errstr) - 1);
     if (h_errno && herr) {
         strncat(errstr, hstrerror(h_errno), len - strlen(errstr) - 1);
+#ifdef WIN32
+    } else if (wsa_errno && perr) {
+        strncat(errstr, hstrerror(wsa_errno), len - strlen(errstr) - 1);
+#endif
     } else if (errno && perr) {
         strncat(errstr, strerror(errno), len - strlen(errstr) - 1);
     }

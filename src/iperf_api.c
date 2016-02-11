@@ -35,24 +35,35 @@
 #include <getopt.h>
 #include <errno.h>
 #include <signal.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <assert.h>
 #include <fcntl.h>
-#include <sys/socket.h>
 #include <sys/types.h>
+#ifdef HAVE_WINSOCK_2
+#include <ws2tcpip.h>
+#include <time.h>
+#include "gettimeofday.h"
+#include "random.h"
+#include <io.h>
+#include <process.h>
+#else
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h>
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#endif
 #include <netinet/tcp.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <sched.h>
+#endif
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
+#include <sys/stat.h>
 #include <setjmp.h>
 #include <stdarg.h>
 
@@ -532,7 +543,7 @@ iperf_on_connect(struct iperf_test *test)
     struct sockaddr_in *sa_inP;
     struct sockaddr_in6 *sa_in6P;
     socklen_t len;
-    int opt;
+    int opt=0;
 
     now_secs = time((time_t*) 0);
     (void) strftime(now_str, sizeof(now_str), rfc1123_fmt, gmtime(&now_secs));
@@ -2593,8 +2604,12 @@ iperf_free_stream(struct iperf_stream *sp)
     struct iperf_interval_results *irp, *nirp;
 
     /* XXX: need to free interval list too! */
+#ifdef HAVE_WINSOCK_2
+    VirtualFree(sp->buffer, 0, MEM_RELEASE);
+#else
     munmap(sp->buffer, sp->test->settings->blksize);
     close(sp->buffer_fd);
+#endif
     if (sp->diskfile_fd >= 0)
 	close(sp->diskfile_fd);
     for (irp = TAILQ_FIRST(&sp->result->interval_results); irp != TAILQ_END(sp->result->interval_results); irp = nirp) {
@@ -2622,7 +2637,9 @@ iperf_new_stream(struct iperf_test *test, int s)
         snprintf(template, sizeof(template) / sizeof(char), "%s", buf);
     }
 
+#ifndef HAVE_WINSOCK_2
     h_errno = 0;
+#endif
 
     sp = (struct iperf_stream *) malloc(sizeof(struct iperf_stream));
     if (!sp) {
@@ -2645,6 +2662,15 @@ iperf_new_stream(struct iperf_test *test, int s)
     TAILQ_INIT(&sp->result->interval_results);
     
     /* Create and randomize the buffer */
+#ifdef HAVE_WINSOCK_2
+    sp->buffer = VirtualAlloc(NULL, test->settings->blksize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!sp->buffer) {
+        i_errno = IECREATESTREAM;
+        free(sp->result);
+        free(sp);
+        return NULL;
+    }
+#else
     sp->buffer_fd = mkstemp(template);
     if (sp->buffer_fd == -1) {
         i_errno = IECREATESTREAM;
@@ -2671,6 +2697,7 @@ iperf_new_stream(struct iperf_test *test, int s)
         free(sp);
         return NULL;
     }
+#endif
     srandom(time(NULL));
     for (i = 0; i < test->settings->blksize; ++i)
         sp->buffer[i] = random();
@@ -2685,7 +2712,11 @@ iperf_new_stream(struct iperf_test *test, int s)
 	sp->diskfile_fd = open(test->diskfile_name, test->sender ? O_RDONLY : (O_WRONLY|O_CREAT|O_TRUNC), S_IRUSR|S_IWUSR);
 	if (sp->diskfile_fd == -1) {
 	    i_errno = IEFILE;
-            munmap(sp->buffer, sp->test->settings->blksize);
+#ifdef HAVE_WINSOCK_2
+        VirtualFree(sp->buffer, 0, MEM_RELEASE);
+#else
+        munmap(sp->buffer, sp->test->settings->blksize);
+#endif
             free(sp->result);
             free(sp);
 	    return NULL;
@@ -2699,8 +2730,12 @@ iperf_new_stream(struct iperf_test *test, int s)
 
     /* Initialize stream */
     if (iperf_init_stream(sp, test) < 0) {
+#ifdef HAVE_WINSOCK_2
+        VirtualFree(sp->buffer, 0, MEM_RELEASE);
+#else
         close(sp->buffer_fd);
         munmap(sp->buffer, sp->test->settings->blksize);
+#endif
         free(sp->result);
         free(sp);
         return NULL;
@@ -2756,7 +2791,7 @@ void
 iperf_add_stream(struct iperf_test *test, struct iperf_stream *sp)
 {
     int i;
-    struct iperf_stream *n, *prev;
+    struct iperf_stream *n, *prev = NULL;
 
     if (SLIST_EMPTY(&test->streams)) {
         SLIST_INSERT_HEAD(&test->streams, sp, streams);
@@ -2811,9 +2846,11 @@ diskfile_recv(struct iperf_stream *sp)
 void
 iperf_catch_sigend(void (*handler)(int))
 {
+#ifndef WIN32
     signal(SIGINT, handler);
     signal(SIGTERM, handler);
     signal(SIGHUP, handler);
+#endif
 }
 
 /**

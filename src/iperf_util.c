@@ -33,16 +33,26 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdarg.h>
-#include <sys/select.h>
 #include <sys/types.h>
+#ifdef HAVE_WINSOCK_2
+#include <WinSock2.h>
+#include "gettimeofday.h"
+#include "random.h"
+#include <process.h>
+#else
+#include <unistd.h>
+#include <sys/select.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/utsname.h>
+#endif
 #include <time.h>
 #include <errno.h>
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
 
 #include "cjson.h"
 
@@ -142,6 +152,9 @@ timeval_diff(struct timeval * tv0, struct timeval * tv1)
 int
 delay(int64_t ns)
 {
+#ifdef WIN32
+    Sleep(ns / 1000000);
+#else
     struct timespec req, rem;
 
     req.tv_sec = 0;
@@ -158,6 +171,7 @@ delay(int64_t ns)
             memcpy(&req, &rem, sizeof(rem));
         else
             return -1;
+#endif
     return 0;
 }
 
@@ -178,6 +192,8 @@ delay(int us)
 void
 cpu_util(double pcpu[3])
 {
+#ifdef WIN32
+#else
     static struct timeval last;
     static clock_t clast;
     static struct rusage rlast;
@@ -209,12 +225,16 @@ cpu_util(double pcpu[3])
     pcpu[0] = (((ctemp - clast) * 1000000.0 / CLOCKS_PER_SEC) / timediff) * 100;
     pcpu[1] = (userdiff / timediff) * 100;
     pcpu[2] = (systemdiff / timediff) * 100;
+#endif
 }
 
 const char *
 get_system_info(void)
 {
     static char buf[1024];
+#ifdef WIN32
+    snprintf(buf, sizeof(buf), "%s", "windows");
+#else
     struct utsname  uts;
 
     memset(buf, 0, 1024);
@@ -222,7 +242,7 @@ get_system_info(void)
 
     snprintf(buf, sizeof(buf), "%s %s %s %s %s", uts.sysname, uts.nodename, 
 	     uts.release, uts.version, uts.machine);
-
+#endif
     return buf;
 }
 

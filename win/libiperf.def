@@ -1,0 +1,137 @@
+LIBRARY libiperf
+EXPORTS
+    iperf_get_verbose
+    iperf_get_control_socket
+    iperf_get_test_omit
+    iperf_get_test_duration
+    iperf_get_test_role
+    iperf_get_test_reverse
+    iperf_get_test_blksize
+    iperf_get_test_outfile
+    iperf_get_test_rate
+    iperf_get_test_burst
+    iperf_get_test_socket_bufsize
+    iperf_get_test_reporter_interval
+    iperf_get_test_stats_interval
+    iperf_get_test_num_streams
+    iperf_get_test_server_port
+    iperf_get_test_server_hostname
+    iperf_get_test_template
+    iperf_get_test_protocol_id
+    iperf_get_test_json_output
+    iperf_get_test_json_output_string
+    iperf_get_test_zerocopy
+    iperf_get_test_get_server_output
+    iperf_get_test_bind_address
+    iperf_get_test_udp_counters_64bit
+    iperf_get_test_one_off
+
+    iperf_set_verbose
+    iperf_set_control_socket
+    iperf_set_test_omit
+    iperf_set_test_duration
+    iperf_set_test_reporter_interval
+    iperf_set_test_stats_interval
+    iperf_set_test_state
+    iperf_set_test_blksize
+    iperf_set_test_rate
+    iperf_set_test_burst
+    iperf_set_test_server_port
+    iperf_set_test_socket_bufsize
+    iperf_set_test_num_streams
+    iperf_set_test_role
+    iperf_set_test_server_hostname
+    iperf_set_test_template
+    iperf_set_test_reverse
+    iperf_set_test_json_output
+    iperf_has_zerocopy
+    iperf_set_test_zerocopy
+    iperf_set_test_get_server_output
+    iperf_set_test_bind_address
+    iperf_set_test_udp_counters_64bit
+    iperf_set_test_one_off
+
+    iperf_exchange_parameters
+
+    add_to_interval_list
+
+    connect_msg
+
+    iperf_stats_callback
+
+    iperf_reporter_callback
+
+    iperf_new_test
+
+    iperf_defaults
+
+    iperf_free_test
+
+    iperf_new_stream
+
+    iperf_add_stream
+
+    iperf_init_stream
+
+    iperf_free_stream
+
+    has_tcpinfo
+    has_tcpinfo_retransmits
+    save_tcpinfo
+    get_total_retransmits
+    get_snd_cwnd
+    get_rtt
+    build_tcpinfo_message
+
+    iperf_set_send_state
+    iperf_check_throttle
+    iperf_send
+    iperf_recv
+    iperf_catch_sigend
+    iperf_got_sigend
+    usage
+    usage_long
+    warning
+    iperf_exchange_results
+    iperf_init_test
+    iperf_create_send_timers
+    iperf_parse_arguments
+    iperf_reset_test
+    iperf_reset_stats
+
+    get_protocol
+    set_protocol
+
+    iperf_on_new_stream
+    iperf_on_test_start
+    iperf_on_connect
+    iperf_on_test_finish
+
+    iperf_run_client
+    iperf_connect
+    iperf_create_streams
+    iperf_handle_message_client
+    iperf_client_end
+
+    iperf_run_server
+    iperf_server_listen
+    iperf_accept
+    iperf_handle_message_server
+    iperf_test_reset
+    iperf_create_pidfile
+    iperf_delete_pidfile
+
+    iperf_json_start
+    iperf_json_finish
+
+    iperf_setaffinity
+    iperf_clearaffinity
+
+    iprintf
+    iflush
+
+    iperf_err
+    iperf_errexit
+    iperf_strerror
+
+    i_errno DATA

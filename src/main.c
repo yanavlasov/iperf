@@ -29,22 +29,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
 #include <errno.h>
 #include <signal.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
-#include <sys/socket.h>
 #include <sys/types.h>
+#ifdef HAVE_WINSOCK_2
+#include <WinSock2.h>
+#else
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
+#endif
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
-#include <netinet/tcp.h>
 
 #include "iperf.h"
 #include "iperf_api.h"
@@ -61,6 +66,14 @@ int
 main(int argc, char **argv)
 {
     struct iperf_test *test;
+
+#ifdef WIN32
+    WSADATA wsaData;
+    int wsaerr = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (wsaerr != 0) {
+        iperf_errexit(NULL, "WSAStratup failed with code %d", wsaerr);
+    }
+#endif
 
     // XXX: Setting the process affinity requires root on most systems.
     //      Is this a feature we really need?
@@ -113,6 +126,10 @@ main(int argc, char **argv)
 
     iperf_free_test(test);
 
+#ifdef WIN32
+    WSACleanup();
+#endif
+
     return 0;
 }
 
@@ -124,6 +141,13 @@ sigend_handler(int sig)
 {
     longjmp(sigend_jmp_buf, 1);
 }
+
+#ifdef WIN32
+static int daemon(int a, int b)
+{
+    return -1;
+}
+#endif
 
 /**************************************************************************/
 static int

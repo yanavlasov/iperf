@@ -24,20 +24,30 @@
  * This code is distributed under a BSD style license, see the LICENSE
  * file for complete information.
  */
+
 #include "iperf_config.h"
 
 #include <stdio.h>
-#include <unistd.h>
 #include <errno.h>
-#include <sys/socket.h>
 #include <sys/types.h>
+#include <assert.h>
+#include <string.h>
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
+#ifdef HAVE_WINSOCK_2
+#include <ws2tcpip.h>
+#include "neterror.h"
+#else
+#define neterror() (void)0
+#include <unistd.h>
+#include <sys/socket.h>
 #include <sys/errno.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <assert.h>
 #include <netdb.h>
-#include <string.h>
 #include <sys/fcntl.h>
+#endif
 
 #ifdef HAVE_SENDFILE
 #ifdef linux
@@ -60,6 +70,26 @@
 #include "net.h"
 #include "timer.h"
 
+static int
+Nsend(int fd, const char *buf, size_t count)
+{
+#ifdef WIN32
+    return send(fd, buf, count, 0);
+#else
+    return write(fd, buf, count);
+#endif
+}
+
+static int
+Nrecv(int fd, char *buf, size_t count)
+{
+#ifdef WIN32
+    return recv(fd, buf, count, 0);
+#else
+    return read(fd, buf, count);
+#endif
+}
+
 /* netdial and netannouce code comes from libtask: http://swtch.com/libtask/
  * Copyright: http://swtch.com/libtask/COPYRIGHT
 */
@@ -68,7 +98,7 @@
 int
 netdial(int domain, int proto, char *local, int local_port, char *server, int port)
 {
-    struct addrinfo hints, *local_res, *server_res;
+    struct addrinfo hints, *local_res = NULL, *server_res;
     int s;
 
     if (local) {
@@ -87,6 +117,7 @@ netdial(int domain, int proto, char *local, int local_port, char *server, int po
 
     s = socket(server_res->ai_family, proto, 0);
     if (s < 0) {
+        neterror();
 	if (local)
 	    freeaddrinfo(local_res);
 	freeaddrinfo(server_res);
@@ -102,7 +133,8 @@ netdial(int domain, int proto, char *local, int local_port, char *server, int po
         }
 
         if (bind(s, (struct sockaddr *) local_res->ai_addr, local_res->ai_addrlen) < 0) {
-	    close(s);
+            neterror();
+            Nclose(s);
 	    freeaddrinfo(local_res);
 	    freeaddrinfo(server_res);
             return -1;
@@ -111,10 +143,13 @@ netdial(int domain, int proto, char *local, int local_port, char *server, int po
     }
 
     ((struct sockaddr_in *) server_res->ai_addr)->sin_port = htons(port);
-    if (connect(s, (struct sockaddr *) server_res->ai_addr, server_res->ai_addrlen) < 0 && errno != EINPROGRESS) {
-	close(s);
-	freeaddrinfo(server_res);
-        return -1;
+    if (connect(s, (struct sockaddr *) server_res->ai_addr, server_res->ai_addrlen) < 0) {
+        neterror();
+        if (errno != EINPROGRESS) {
+            Nclose(s);
+            freeaddrinfo(server_res);
+            return -1;
+        }
     }
 
     freeaddrinfo(server_res);
@@ -157,14 +192,16 @@ netannounce(int domain, int proto, char *local, int port)
 
     s = socket(res->ai_family, proto, 0);
     if (s < 0) {
-	freeaddrinfo(res);
+        neterror();
+        freeaddrinfo(res);
         return -1;
     }
 
     opt = 1;
     if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, 
 		   (char *) &opt, sizeof(opt)) < 0) {
-	close(s);
+        neterror();
+        Nclose(s);
 	freeaddrinfo(res);
 	return -1;
     }
@@ -184,7 +221,8 @@ netannounce(int domain, int proto, char *local, int port)
 	    opt = 1;
 	if (setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, 
 		       (char *) &opt, sizeof(opt)) < 0) {
-	    close(s);
+        neterror();
+        Nclose(s);
 	    freeaddrinfo(res);
 	    return -1;
 	}
@@ -192,7 +230,8 @@ netannounce(int domain, int proto, char *local, int port)
 #endif /* IPV6_V6ONLY */
 
     if (bind(s, (struct sockaddr *) res->ai_addr, res->ai_addrlen) < 0) {
-        close(s);
+        neterror();
+        Nclose(s);
 	freeaddrinfo(res);
         return -1;
     }
@@ -201,7 +240,8 @@ netannounce(int domain, int proto, char *local, int port)
     
     if (proto == SOCK_STREAM) {
         if (listen(s, 5) < 0) {
-	    close(s);
+            neterror();
+            Nclose(s);
             return -1;
         }
     }
@@ -221,8 +261,9 @@ Nread(int fd, char *buf, size_t count, int prot)
     register size_t nleft = count;
 
     while (nleft > 0) {
-        r = read(fd, buf, nleft);
+        r = Nrecv(fd, buf, nleft);
         if (r < 0) {
+            neterror();
             if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
             else
@@ -248,9 +289,10 @@ Nwrite(int fd, const char *buf, size_t count, int prot)
     register size_t nleft = count;
 
     while (nleft > 0) {
-	r = write(fd, buf, nleft);
+	r = Nsend(fd, buf, nleft);
 	if (r < 0) {
-	    switch (errno) {
+        neterror();
+        switch (errno) {
 		case EINTR:
 		case EAGAIN:
 #if (EAGAIN != EWOULDBLOCK)
@@ -371,7 +413,8 @@ getsock_tcp_mss(int inSock)
     len = sizeof(mss);
     rc = getsockopt(inSock, IPPROTO_TCP, TCP_MAXSEG, (char *)&mss, &len);
     if (rc == -1) {
-	perror("getsockopt TCP_MAXSEG");
+        neterror();
+        perror("getsockopt TCP_MAXSEG");
 	return -1;
     }
 
@@ -396,6 +439,7 @@ set_tcp_options(int sock, int no_delay, int mss)
         len = sizeof(no_delay);
         rc = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&no_delay, len);
         if (rc == -1) {
+            neterror();
             perror("setsockopt TCP_NODELAY");
             return -1;
         }
@@ -410,16 +454,19 @@ set_tcp_options(int sock, int no_delay, int mss)
         len = sizeof(new_mss);
         rc = setsockopt(sock, IPPROTO_TCP, TCP_MAXSEG, (char *)&new_mss, len);
         if (rc == -1) {
+            neterror();
             perror("setsockopt TCP_MAXSEG");
             return -1;
         }
         /* verify results */
         rc = getsockopt(sock, IPPROTO_TCP, TCP_MAXSEG, (char *)&new_mss, &len);
         if (rc == -1) {
+            neterror();
             perror("getsockopt TCP_MAXSEG");
             return -1;
         }
         if (new_mss != mss) {
+            neterror();
             perror("setsockopt value mismatch");
             return -1;
         }
@@ -433,6 +480,14 @@ set_tcp_options(int sock, int no_delay, int mss)
 int
 setnonblocking(int fd, int nonblocking)
 {
+#ifdef HAVE_WINSOCK_2
+    unsigned long val = nonblocking ? 1 : 0;
+    int rc = ioctlsocket(fd, FIONBIO, &val);
+    if (rc == SOCKET_ERROR) {
+        neterror();
+        perror("ioctlsocket(FIONBIO)");
+    }
+#else
     int flags, newflags;
 
     flags = fcntl(fd, F_GETFL, 0);
@@ -449,6 +504,7 @@ setnonblocking(int fd, int nonblocking)
 	    perror("fcntl(F_SETFL)");
 	    return -1;
 	}
+#endif
     return 0;
 }
 
@@ -461,7 +517,21 @@ getsockdomain(int sock)
     socklen_t len = sizeof(sa);
 
     if (getsockname(sock, (struct sockaddr *)&sa, &len) < 0) {
+        neterror();
         return -1;
     }
     return ((struct sockaddr *) &sa)->sa_family;
 }
+
+/****************************************************************************/
+
+int 
+Nclose(int fd)
+{
+#ifdef WIN32
+    return closesocket(fd);
+#else
+    return close(fd);
+#endif
+}
+
